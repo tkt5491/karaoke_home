@@ -1,3 +1,4 @@
+using QRCoder;
 using karaoke_home.Player;
 using karaoke_home.Queue;
 using karaoke_home.NAS;
@@ -15,7 +16,7 @@ namespace karaoke_home
         public MainForm()
         {
             InitializeComponent();
-            //SetupUI();
+            SetupUI();
             //SetupVLC();
 
             // Khởi tạo các thành phần
@@ -39,17 +40,41 @@ namespace karaoke_home
             // In ra thử số lượng bài hát tìm được để test
             MessageBox.Show($"Đã tìm thấy {myLibrary.Count} bài hát trong NAS!");
         }
-        /*private void SetupUI()
+        private void SetupUI()
         {
-            // Cài đặt Form Fullscreen (Giống quán Karaoke thật)
-            this.FormBorderStyle = FormBorderStyle.None;
-            this.WindowState = FormWindowState.Maximized;
-
-            // Text mặc định ban đầu
-            lblNowPlaying.Text = "Đang phát: Chưa có bài hát";
-            lblNextSong.Text = "Tiếp theo: (Trống)";
+            // Gọi hàm tạo QR Code ở đây
+            // Vì Nginx chứa Web UI sẽ nằm trên Ubuntu, ta trỏ thẳng URL về IP của Ubuntu
+            string webUrl = "http://10.0.0.50/";
+            GenerateQRCode(webUrl);
         }
-        private void SetupVLC()
+
+        // Hàm xử lý tạo hình ảnh QR Code
+        private void GenerateQRCode(string url)
+        {
+            try
+            {
+                QRCodeGenerator qrGenerator = new QRCodeGenerator();
+                // Khởi tạo dữ liệu QR (Mức Q - sửa lỗi 25% giúp điện thoại quét nhạy hơn)
+                QRCodeData qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
+
+                // Tạo ảnh Bitmap từ dữ liệu QR
+                QRCode qrCode = new QRCode(qrCodeData);
+                Bitmap qrCodeImage = qrCode.GetGraphic(5); // Số 5 là độ nét (Pixel/module)
+
+                // Đổ ảnh vào PictureBox trên giao diện (giả sử em đặt tên là picQRCode)
+                if (picQRCode != null)
+                {
+                    picQRCode.Image = qrCodeImage;
+                    picQRCode.SizeMode = PictureBoxSizeMode.Zoom; // Ép ảnh vừa vặn với khung
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Lỗi QR] Không thể tạo mã QR: {ex.Message}");
+            }
+        }
+
+        /*private void SetupVLC()
         {
             // Khởi tạo engine VLC
             _libVLC = new LibVLC();

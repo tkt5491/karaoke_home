@@ -25,7 +25,7 @@ namespace karaoke_home.NAS
         private readonly string _rootPath;
 
         // Khởi tạo mặc định trỏ vào ổ K: của bạn
-        public NASScanner(string rootPath = @"K:\Artist")
+        public NASScanner(string rootPath = @"C:\Users\tkt\Downloads\Artist")//K:/Artist
         {
             _rootPath = rootPath;
         }
