@@ -1,9 +1,10 @@
-﻿using System.Text.Json;
-using System.IO;
-using System.Net;
-using System.Threading;
+﻿using karaoke_home.NAS;
 using karaoke_home.Player;
 using karaoke_home.Queue;
+using System.IO;
+using System.Net;
+using System.Text.Json;
+using System.Threading;
 
 namespace karaoke_home.Web
 {
@@ -13,12 +14,14 @@ namespace karaoke_home.Web
         private Thread _serverThread;
         private MediaPlayer _player;
         private QueueManager _queue;
+        private NASScanner _scanner;
 
         // Nhận tham chiếu Player và Queue từ MainForm truyền vào để điều khiển
-        public HttpServer(MediaPlayer player, QueueManager queue)
+        public HttpServer(MediaPlayer player, QueueManager queue, NASScanner scanner)
         {
             _player = player;
             _queue = queue;
+            _scanner = scanner;
             _listener = new HttpListener();
         }
 
@@ -62,15 +65,111 @@ namespace karaoke_home.Web
             var request = context.Request;
             var response = context.Response;
 
-            // In ra Console để debug xem điện thoại đang gọi tới đường dẫn nào
-            Console.WriteLine($"[Request] {request.HttpMethod} {request.RawUrl}");
+            string url = request.RawUrl;
+            string method = request.HttpMethod;
 
-            // TODO: Sẽ viết logic phân luồng (Routing) ở đây
-            // Ví dụ: Nếu URL là "/player/pause" -> gọi _player.PauseOrResume()
+            Console.WriteLine($"[Web Server] Đang xử lý: {method} {url}");
 
-            // Tạm thời trả về HTTP 200 OK
-            response.StatusCode = 200;
-            response.Close();
+            // BẬT ĐÈN XANH CHO CORS (Rất quan trọng)
+            response.Headers.Add("Access-Control-Allow-Origin", "*"); // Cho phép mọi Web gọi vào
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+            // Xử lý request OPTIONS (Preflight request của trình duyệt)
+            if (request.HttpMethod == "OPTIONS")
+            {
+                response.StatusCode = 200;
+                response.Close();
+                return;
+            }
+            try
+            {
+                // ========================================================
+                // 2. ROUTING DỮ LIỆU (API TRẢ VỀ JSON CHO JAVASCRIPT)
+                // ========================================================
+                if (url.StartsWith("/api/queue") && method == "GET")
+                {
+                    // Lấy danh sách đang chờ từ QueueManager
+                    var currentQueue = _queue.GetCurrentQueue();
+
+                    // Biến đổi List<Song> thành chuỗi JSON để Web hiểu được
+                    string json = JsonSerializer.Serialize(currentQueue);
+                    byte[] buffer = System.Text.Encoding.UTF8.GetBytes(json);
+
+                    response.ContentType = "application/json; charset=utf-8";
+                    response.ContentLength64 = buffer.Length;
+                    response.OutputStream.Write(buffer, 0, buffer.Length);
+                }
+                // ========================================================
+                // API: Lấy toàn bộ danh sách bài hát từ NAS
+                // ========================================================
+                else if (url.StartsWith("/api/songs") && method == "GET")
+                {
+                    var allSongs = _scanner.ScanSongs();
+                    string json = JsonSerializer.Serialize(allSongs);
+                    byte[] buffer = System.Text.Encoding.UTF8.GetBytes(json);
+
+                    response.ContentType = "application/json; charset=utf-8";
+                    response.ContentLength64 = buffer.Length;
+                    response.OutputStream.Write(buffer, 0, buffer.Length);
+                }
+
+                // ========================================================
+                // API: Thêm bài hát vào hàng chờ (Order / Ưu tiên)
+                // ========================================================
+                else if (url.StartsWith("/api/queue/add") && method == "POST")
+                {
+                    // Đọc đường dẫn file từ URL
+                    string filePath = request.QueryString["path"];
+                    bool isPriority = url.Contains("add_priority"); // Kiểm tra xem có phải lệnh ưu tiên không
+
+                    if (!string.IsNullOrEmpty(filePath))
+                    {
+                        var allSongs = _scanner.ScanSongs();
+                        var song = allSongs.FirstOrDefault(s => s.FilePath == filePath);
+
+                        if (song != null)
+                        {
+                            if (isPriority) _queue.PrioritySong(song);
+                            else _queue.AddSong(song);
+                        }
+                    }
+                    response.StatusCode = 200;
+                }
+                // ========================================================
+                // 3. ROUTING ĐIỀU KHIỂN (NHẬN LỆNH POST TỪ ĐIỆN THOẠI)
+                // ========================================================
+                else if (url.StartsWith("/api/player/pause") && method == "POST")
+                {
+                    _player.PauseOrResume(); // Ra lệnh cho VLC tạm dừng/tiếp tục
+                    response.StatusCode = 200; // Trả về 200 OK báo hiệu thành công
+                }
+                else if (url.StartsWith("/api/player/voldown") && method == "POST")
+                {
+                    _player.VolumeDown();
+                    response.StatusCode = 200;
+                }
+                else if (url.StartsWith("/api/player/volup") && method == "POST")
+                {
+                    _player.VolumeUp();
+                    response.StatusCode = 200;
+                }
+                // (Sau này bạn có thể bổ sung thêm if/else cho Next, Seek, Priority...)
+
+                else
+                {
+                    // Nếu gửi một đường link tào lao không có trong cấu hình
+                    response.StatusCode = 404;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Lỗi API] {ex.Message}");
+                response.StatusCode = 500; // Lỗi server nội bộ
+            }
+            finally
+            {
+                response.Close(); // Luôn luôn phải đóng response để giải phóng kết nối
+            }
         }
 
         public void Stop()

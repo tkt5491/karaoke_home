@@ -34,7 +34,7 @@ namespace karaoke_home
             // TEST NHANH: Quét và bỏ thử 2 bài đầu tiên vào Queue rồi ép nó phát luôn
             //TestHarness();
 
-            _server = new karaoke_home.Web.HttpServer(_player, _queue);
+            _server = new karaoke_home.Web.HttpServer(_player, _queue, _scanner);
             _server.Start("8888");
         }
         private void MainForm_Load(object sender, EventArgs e)
@@ -49,7 +49,7 @@ namespace karaoke_home
         {
             // Gọi hàm tạo QR Code ở đây
             // Vì Nginx chứa Web UI sẽ nằm trên Ubuntu, ta trỏ thẳng URL về IP của Ubuntu
-            string webUrl = "http://10.0.0.50/";
+            string webUrl = "http://192.168.0.230/";
             GenerateQRCode(webUrl);
         }
 
