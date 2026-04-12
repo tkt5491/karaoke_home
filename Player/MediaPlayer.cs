@@ -1,6 +1,4 @@
-﻿using System;
-using System.Windows.Forms;
-using LibVLCSharp.Shared;
+﻿using LibVLCSharp.Shared;
 using LibVLCSharp.WinForms;
 using karaoke_home.NAS;
 

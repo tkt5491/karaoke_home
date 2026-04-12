@@ -11,7 +11,7 @@
   <ItemGroup>
     <PackageReference Include="LibVLCSharp" Version="3.9.6" />
     <PackageReference Include="LibVLCSharp.WinForms" Version="3.9.6" />
-    <PackageReference Include="QRCoder" Version="1.7.0" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
   </ItemGroup>
 

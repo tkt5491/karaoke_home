@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using karaoke_home.NAS;
+﻿using karaoke_home.NAS;
 
 namespace karaoke_home.Queue
 {

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-
-namespace karaoke_home.NAS
+﻿namespace karaoke_home.NAS
 {
     // 1. Định nghĩa cấu trúc dữ liệu của một Bài hát
     public class Song

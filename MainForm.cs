@@ -2,6 +2,7 @@ using QRCoder;
 using karaoke_home.Player;
 using karaoke_home.Queue;
 using karaoke_home.NAS;
+using karaoke_home.Web;
 using System;
 using System.Drawing;
 using System.Windows.Forms;
@@ -13,6 +14,7 @@ namespace karaoke_home
         private MediaPlayer _player;
         private QueueManager _queue;
         private NASScanner _scanner;
+        private HttpServer _server;
         public MainForm()
         {
             InitializeComponent();
@@ -30,7 +32,10 @@ namespace karaoke_home
             _player.SongFinished += Player_SongFinished;
 
             // TEST NHANH: Quét và bỏ thử 2 bài đầu tiên vào Queue rồi ép nó phát luôn
-            TestHarness();
+            //TestHarness();
+
+            _server = new karaoke_home.Web.HttpServer(_player, _queue);
+            _server.Start("8888");
         }
         private void MainForm_Load(object sender, EventArgs e)
         {
@@ -135,9 +140,7 @@ namespace karaoke_home
             }
         }
 
-        private void btnExit_Click(object sender, EventArgs e)
-        {
-            this.Close();
-        }
+
+
     }
 }

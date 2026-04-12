@@ -32,13 +32,9 @@
             lblNextSong = new Label();
             lblNowPlaying = new Label();
             picQRCode = new PictureBox();
-            panelBottom = new Panel();
-            btnExit = new Button();
-            lblSpecs = new Label();
             panelCenter = new Panel();
             panelTop.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)picQRCode).BeginInit();
-            panelBottom.SuspendLayout();
             SuspendLayout();
             // 
             // panelTop
@@ -84,45 +80,13 @@
             picQRCode.TabIndex = 0;
             picQRCode.TabStop = false;
             // 
-            // panelBottom
-            // 
-            panelBottom.BackColor = Color.Black;
-            panelBottom.Controls.Add(btnExit);
-            panelBottom.Controls.Add(lblSpecs);
-            panelBottom.Dock = DockStyle.Bottom;
-            panelBottom.Location = new Point(0, 817);
-            panelBottom.Name = "panelBottom";
-            panelBottom.Size = new Size(1584, 44);
-            panelBottom.TabIndex = 1;
-            // 
-            // btnExit
-            // 
-            btnExit.Location = new Point(1497, 14);
-            btnExit.Name = "btnExit";
-            btnExit.Size = new Size(75, 23);
-            btnExit.TabIndex = 0;
-            btnExit.Text = "btnExit";
-            btnExit.UseVisualStyleBackColor = true;
-            btnExit.Click += btnExit_Click;
-            // 
-            // lblSpecs
-            // 
-            lblSpecs.AutoSize = true;
-            lblSpecs.Font = new Font("Segoe UI", 12F);
-            lblSpecs.ForeColor = Color.Gray;
-            lblSpecs.Location = new Point(12, 14);
-            lblSpecs.Name = "lblSpecs";
-            lblSpecs.Size = new Size(67, 21);
-            lblSpecs.TabIndex = 0;
-            lblSpecs.Text = "lblSpecs";
-            // 
             // panelCenter
             // 
             panelCenter.BackColor = Color.Black;
             panelCenter.Dock = DockStyle.Fill;
             panelCenter.Location = new Point(0, 100);
             panelCenter.Name = "panelCenter";
-            panelCenter.Size = new Size(1584, 717);
+            panelCenter.Size = new Size(1584, 761);
             panelCenter.TabIndex = 2;
             // 
             // MainForm
@@ -131,7 +95,6 @@
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1584, 861);
             Controls.Add(panelCenter);
-            Controls.Add(panelBottom);
             Controls.Add(panelTop);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             Name = "MainForm";
@@ -141,20 +104,15 @@
             panelTop.ResumeLayout(false);
             panelTop.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)picQRCode).EndInit();
-            panelBottom.ResumeLayout(false);
-            panelBottom.PerformLayout();
             ResumeLayout(false);
         }
 
         #endregion
 
         private Panel panelTop;
-        private Panel panelBottom;
         private Panel panelCenter;
         private PictureBox picQRCode;
         private Label lblNowPlaying;
         private Label lblNextSong;
-        private Label lblSpecs;
-        private Button btnExit;
     }
 }
