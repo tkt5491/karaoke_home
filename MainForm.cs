@@ -32,7 +32,7 @@ namespace karaoke_home
             _player.SongFinished += Player_SongFinished;
 
             // TEST NHANH: Quét và bỏ thử 2 bài đầu tiên vào Queue rồi ép nó phát luôn
-            //TestHarness();
+            TestHarness();
 
             _server = new karaoke_home.Web.HttpServer(_player, _queue, _scanner);
             _server.Start("8888");

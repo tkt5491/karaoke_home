@@ -58,7 +58,7 @@
             lblNextSong.Name = "lblNextSong";
             lblNextSong.Size = new Size(95, 21);
             lblNextSong.TabIndex = 3;
-            lblNextSong.Text = "lblNextSong";
+            lblNextSong.Text = "Next: ...";
             // 
             // lblNowPlaying
             // 
@@ -69,10 +69,11 @@
             lblNowPlaying.Name = "lblNowPlaying";
             lblNowPlaying.Size = new Size(111, 21);
             lblNowPlaying.TabIndex = 2;
-            lblNowPlaying.Text = "lblNowPlaying";
+            lblNowPlaying.Text = "Now Playing: ...";
             // 
             // picQRCode
             // 
+            picQRCode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             picQRCode.Location = new Point(1436, 6);
             picQRCode.Name = "picQRCode";
             picQRCode.Size = new Size(136, 94);
