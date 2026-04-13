@@ -19,7 +19,6 @@ namespace karaoke_home
         {
             InitializeComponent();
             SetupUI();
-            //SetupVLC();
 
             // Khởi tạo các thành phần
             _queue = new QueueManager();
@@ -37,6 +36,7 @@ namespace karaoke_home
             _server = new karaoke_home.Web.HttpServer(_player, _queue, _scanner);
             _server.Start("8888");
         }
+
         private void MainForm_Load(object sender, EventArgs e)
         {
             NAS.NASScanner scanner = new NAS.NASScanner();
@@ -45,6 +45,7 @@ namespace karaoke_home
             // In ra thử số lượng bài hát tìm được để test
             MessageBox.Show($"Đã tìm thấy {myLibrary.Count} bài hát trong NAS!");
         }
+
         private void SetupUI()
         {
             // Gọi hàm tạo QR Code ở đây
@@ -79,21 +80,6 @@ namespace karaoke_home
             }
         }
 
-        /*private void SetupVLC()
-        {
-            // Khởi tạo engine VLC
-            _libVLC = new LibVLC();
-            _player = new MediaPlayer(_libVLC);
-
-            // Tạo khung hiển thị Video và nhét nó vào panelCenter
-            _videoView = new VideoView
-            {
-                MediaPlayer = _player,
-                Dock = DockStyle.Fill
-            };
-
-            panelCenter.Controls.Add(_videoView);
-        }*/
         private void Player_SongFinished(object sender, EventArgs e)
         {
             // Hàm này tự kích hoạt khi bài trước hát xong
@@ -139,8 +125,6 @@ namespace karaoke_home
                 PlayNextSongInQueue();    // Kích hoạt phát bài đầu tiên
             }
         }
-
-
 
     }
 }

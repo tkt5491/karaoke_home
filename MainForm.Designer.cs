@@ -56,7 +56,7 @@
             lblNextSong.ForeColor = Color.White;
             lblNextSong.Location = new Point(20, 57);
             lblNextSong.Name = "lblNextSong";
-            lblNextSong.Size = new Size(95, 21);
+            lblNextSong.Size = new Size(58, 21);
             lblNextSong.TabIndex = 3;
             lblNextSong.Text = "Next: ...";
             // 
@@ -67,7 +67,7 @@
             lblNowPlaying.ForeColor = Color.White;
             lblNowPlaying.Location = new Point(20, 14);
             lblNowPlaying.Name = "lblNowPlaying";
-            lblNowPlaying.Size = new Size(111, 21);
+            lblNowPlaying.Size = new Size(114, 21);
             lblNowPlaying.TabIndex = 2;
             lblNowPlaying.Text = "Now Playing: ...";
             // 
@@ -97,10 +97,11 @@
             ClientSize = new Size(1584, 861);
             Controls.Add(panelCenter);
             Controls.Add(panelTop);
-            FormBorderStyle = FormBorderStyle.FixedSingle;
+            FormBorderStyle = FormBorderStyle.None;
             Name = "MainForm";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Karaoke_Home";
+            WindowState = FormWindowState.Maximized;
             Load += MainForm_Load;
             panelTop.ResumeLayout(false);
             panelTop.PerformLayout();
