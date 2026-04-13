@@ -135,6 +135,7 @@ namespace karaoke_home.Web
                     }
                     response.StatusCode = 200;
                 }
+                
                 // ========================================================
                 // 3. ROUTING ĐIỀU KHIỂN (NHẬN LỆNH POST TỪ ĐIỆN THOẠI)
                 // ========================================================
@@ -154,6 +155,31 @@ namespace karaoke_home.Web
                     response.StatusCode = 200;
                 }
                 // (Sau này bạn có thể bổ sung thêm if/else cho Next, Seek, Priority...)
+                else if (url.StartsWith("/api/queue/priority") && method == "POST")
+                {
+                    int index = int.Parse(request.QueryString["index"]);
+                    var queue = _queue.GetCurrentQueue();
+
+                    if (index >= 0 && index < queue.Count)
+                    {
+                        var song = queue[index];
+                        _queue.RemoveSong(index);
+                        _queue.PrioritySong(song);
+                    }
+
+                    response.StatusCode = 200;
+                }
+                else if (url.StartsWith("/api/queue/remove") && method == "POST")
+                {
+                    int index = int.Parse(request.QueryString["index"]);
+                    _queue.RemoveSong(index);
+                    response.StatusCode = 200;
+                }
+                else if (url.StartsWith("/api/player/next") && method == "POST")
+                {
+                    _player.Stop();
+                    response.StatusCode = 200;
+                }
 
                 else
                 {
