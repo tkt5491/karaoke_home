@@ -36,7 +36,7 @@ namespace karaoke_home
             _player.SongFinished += Player_SongFinished;
 
             // TEST NHANH: Quét và bỏ thử 2 bài đầu tiên vào Queue rồi ép nó phát luôn
-            //TestHarness();
+            TestHarness();
 
             _server = new karaoke_home.Web.HttpServer(_player, _queue, _scanner);
             _server.Start("8888");
@@ -163,14 +163,28 @@ namespace karaoke_home
             lblNextSong.Text = $"Tiếp theo: {nextSong}";
         }
 
-        private void TestHarness()
+        private async void TestHarness()
         {
-            //var songs = _scanner.ScanSongs();
-            if (_isPlayingBGM)//songs.Count >= 2
+            var songs = _scanner.ScanSongs();
+
+            // ❗ Đảm bảo có ít nhất 1 bài
+            if (songs.Count == 0) return;
+
+            // 👉 Giai đoạn 1: KHÔNG add gì → để hệ thống tự chạy BGM
+            PlayNextSongInQueue();
+
+            // 👉 Giai đoạn 2: giả lập user order sau 5 giây
+            await Task.Delay(5000);
+
+            Console.WriteLine("🔥 [TEST] User đã order bài!");
+
+            _queue.AddSong(songs[20]);
+            _queue.AddSong(songs[19]);
+
+            // ❗ QUAN TRỌNG: nếu đang BGM thì chuyển ngay
+            if (_isPlayingBGM)
             {
-                //_queue.AddSong(songs[0]); // Đưa bài 1 vào queue
-                //_queue.AddSong(songs[1]); // Đưa bài 2 vào queue
-                PlayNextSongInQueue();    // Kích hoạt phát bài đầu tiên
+                PlayNextSongInQueue();
             }
         }
 
