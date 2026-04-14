@@ -15,11 +15,16 @@ namespace karaoke_home
         private QueueManager _queue;
         private NASScanner _scanner;
         private HttpServer _server;
+        // BGM system
+        private List<Song> _bgmList = new List<Song>();
+        private int _bgmIndex = 0;
+        private bool _isPlayingBGM = false;
+
         public MainForm()
         {
             InitializeComponent();
             SetupUI();
-
+            LoadBGM();
             // Khởi tạo các thành phần
             _queue = new QueueManager();
             _scanner = new NASScanner();
@@ -31,10 +36,11 @@ namespace karaoke_home
             _player.SongFinished += Player_SongFinished;
 
             // TEST NHANH: Quét và bỏ thử 2 bài đầu tiên vào Queue rồi ép nó phát luôn
-            TestHarness();
+            //TestHarness();
 
             _server = new karaoke_home.Web.HttpServer(_player, _queue, _scanner);
             _server.Start("8888");
+            PlayNextSongInQueue();
         }
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -52,6 +58,24 @@ namespace karaoke_home
             // Vì Nginx chứa Web UI sẽ nằm trên Ubuntu, ta trỏ thẳng URL về IP của Ubuntu
             string webUrl = "http://192.168.0.230/";
             GenerateQRCode(webUrl);
+        }
+
+        private void LoadBGM()
+        {
+            string bgmPath = @"C:\Users\tkt\Downloads\BGM";
+
+            if (!Directory.Exists(bgmPath)) return;
+
+            var files = Directory.GetFiles(bgmPath, "*.mp4");
+
+            foreach (var file in files)
+            {
+                _bgmList.Add(new Song(
+                    Path.GetFileNameWithoutExtension(file),
+                    "BGM",
+                    file
+                ));
+            }
         }
 
         // Hàm xử lý tạo hình ảnh QR Code
@@ -83,13 +107,22 @@ namespace karaoke_home
         private void Player_SongFinished(object sender, EventArgs e)
         {
             // Hàm này tự kích hoạt khi bài trước hát xong
-            PlayNextSongInQueue();
+            //PlayNextSongInQueue();
+            if (_isPlayingBGM)
+            {
+                PlayNextBGM(); // 🔁 loop BGM
+            }
+            else
+            {
+                PlayNextSongInQueue();
+            }
         }
         private void PlayNextSongInQueue()
         {
             var nextSong = _queue.GetNextSong(); // Rút bài đầu tiên ra khỏi hàng chờ
             if (nextSong != null)
             {
+                _isPlayingBGM = false; //
                 _player.PlaySong(nextSong);
 
                 // Cập nhật dòng chữ trên UI
@@ -99,10 +132,25 @@ namespace karaoke_home
             }
             else
             {
-                UpdateUIInfo("Chưa có bài hát", "(Trống)");
+                //UpdateUIInfo("Chưa có bài hát", "(Trống)");
+                PlayNextBGM(); // fallback sang BGM
             }
         }
-        
+
+        private void PlayNextBGM()
+        {
+            if (_bgmList.Count == 0) return;
+
+            _isPlayingBGM = true;
+
+            var song = _bgmList[_bgmIndex];
+            _player.PlaySong(song);
+
+            UpdateUIInfo($"🎧 NHẠC NỀN: {song.Title.ToUpper()}", "😒BẠN ĐÃ ORDER BÀI GÌ ĐÂU🤳QUÉT QR GÓC MÀN HÌNH RỒI CHỌN BÀI ĐI🎙");
+
+            _bgmIndex = (_bgmIndex + 1) % _bgmList.Count;
+        }
+
         public void UpdateUIInfo(string nowPlaying, string nextSong)
         {
             // Cần dùng Invoke nếu hàm này được gọi từ Thread khác (như HttpListener)
@@ -117,11 +165,11 @@ namespace karaoke_home
 
         private void TestHarness()
         {
-            var songs = _scanner.ScanSongs();
-            if (songs.Count >= 2)
+            //var songs = _scanner.ScanSongs();
+            if (_isPlayingBGM)//songs.Count >= 2
             {
-                _queue.AddSong(songs[0]); // Đưa bài 1 vào queue
-                _queue.AddSong(songs[1]); // Đưa bài 2 vào queue
+                //_queue.AddSong(songs[0]); // Đưa bài 1 vào queue
+                //_queue.AddSong(songs[1]); // Đưa bài 2 vào queue
                 PlayNextSongInQueue();    // Kích hoạt phát bài đầu tiên
             }
         }
