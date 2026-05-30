@@ -4,63 +4,160 @@ namespace karaoke_home.Queue
 {
     public class QueueManager
     {
-        // Sử dụng List để dễ dàng quản lý việc Xóa và Ưu tiên
-        private List<Song> _waitingList;
+        // ─── Cấu hình ────────────────────────────────────────────────────────
+        private const int MaxQueueSize = 50; // Giới hạn tối đa để tránh spam
 
-        public QueueManager()
-        {
-            _waitingList = new List<Song>();
-        }
+        // ─── State nội bộ ────────────────────────────────────────────────────
+        private readonly List<Song> _waitingList = new();
+        private readonly object _lock = new(); // Dùng để lock mọi thao tác trên list
 
-        // 1. Thêm bài hát (Order bình thường - Đẩy xuống cuối hàng)
-        public void AddSong(Song song)
-        {
-            _waitingList.Add(song);
-            Console.WriteLine($"[Queue] Đã thêm: {song.Title}");
-        }
+        // ─── Event thông báo queue thay đổi (để UI/HttpServer tự update) ─────
+        public event Action? QueueChanged;
 
-        // 2. Chức năng ƯU TIÊN (Chèn lên đầu hàng chờ)
-        public void PrioritySong(Song song)
+        // ════════════════════════════════════════════════════════════════════
+        // 1. Thêm bài hát bình thường — đẩy xuống cuối hàng
+        // ════════════════════════════════════════════════════════════════════
+        public bool AddSong(Song song)
         {
-            // Chèn vào vị trí số 0 (sẽ được phát ngay sau khi bài hiện tại kết thúc)
-            _waitingList.Insert(0, song);
-            Console.WriteLine($"[Queue] Đã ƯU TIÊN: {song.Title}");
-        }
-
-        // 3. Lấy bài hát tiếp theo để phát (Đồng thời xóa nó khỏi danh sách chờ)
-        public Song GetNextSong()
-        {
-            if (_waitingList.Count > 0)
+            lock (_lock)
             {
-                Song nextSong = _waitingList[0];
-                _waitingList.RemoveAt(0);
-                return nextSong;
+                if (_waitingList.Count >= MaxQueueSize)
+                {
+                    Console.WriteLine($"[Queue] Từ chối: hàng chờ đã đầy ({MaxQueueSize} bài). Bài bị từ chối: {song.Title}");
+                    return false;
+                }
+
+                _waitingList.Add(song);
+                Console.WriteLine($"[Queue] Đã thêm: {song.Title} (vị trí {_waitingList.Count})");
             }
-            return null; // Trả về null nếu hết bài
+
+            QueueChanged?.Invoke(); // Gọi ra ngoài lock để tránh deadlock
+            return true;
         }
 
-        // 4. Lấy danh sách đang chờ (Để sau này hiển thị lên Web cho điện thoại xem)
+        // ════════════════════════════════════════════════════════════════════
+        // 2. Ưu tiên — chèn lên đầu hàng, phát ngay sau bài hiện tại
+        // ════════════════════════════════════════════════════════════════════
+        public bool PrioritySong(Song song)
+        {
+            lock (_lock)
+            {
+                if (_waitingList.Count >= MaxQueueSize)
+                {
+                    Console.WriteLine($"[Queue] Từ chối priority: hàng chờ đã đầy. Bài bị từ chối: {song.Title}");
+                    return false;
+                }
+
+                _waitingList.Insert(0, song);
+                Console.WriteLine($"[Queue] Đã ƯU TIÊN: {song.Title}");
+            }
+
+            QueueChanged?.Invoke();
+            return true;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // 3. Lấy bài tiếp theo để phát — xóa khỏi danh sách chờ
+        // ════════════════════════════════════════════════════════════════════
+        public Song? GetNextSong()
+        {
+            Song? next;
+
+            lock (_lock)
+            {
+                if (_waitingList.Count == 0) return null;
+
+                next = _waitingList[0];
+                _waitingList.RemoveAt(0);
+                Console.WriteLine($"[Queue] Đang phát: {next.Title} | Còn lại: {_waitingList.Count} bài");
+            }
+
+            QueueChanged?.Invoke();
+            return next;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // 4. Xem bài tiếp theo mà không lấy ra — dùng cho UI "Next: ..."
+        // ════════════════════════════════════════════════════════════════════
+        public Song? PeekNextSong()
+        {
+            lock (_lock)
+            {
+                return _waitingList.Count > 0 ? _waitingList[0] : null;
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // 5. Lấy danh sách hiện tại — trả về CLONE để tránh race condition
+        //    Caller không thể modify list nội bộ qua reference này
+        // ════════════════════════════════════════════════════════════════════
         public List<Song> GetCurrentQueue()
         {
-            return _waitingList;
+            lock (_lock)
+            {
+                return new List<Song>(_waitingList); // Clone, không trả reference gốc
+            }
         }
 
-        // 5. Xóa một bài hát bất kỳ trong hàng chờ (Chức năng Xóa)
+        // ════════════════════════════════════════════════════════════════════
+        // 6. Xóa bài tại vị trí index
+        // ════════════════════════════════════════════════════════════════════
         public bool RemoveSong(int index)
         {
-            if (index >= 0 && index < _waitingList.Count)
+            bool removed;
+
+            lock (_lock)
             {
+                if (index < 0 || index >= _waitingList.Count)
+                {
+                    Console.WriteLine($"[Queue] RemoveSong: index {index} ngoài phạm vi (size={_waitingList.Count})");
+                    return false;
+                }
+
+                Console.WriteLine($"[Queue] Đã xóa: {_waitingList[index].Title} (index {index})");
                 _waitingList.RemoveAt(index);
-                return true;
+                removed = true;
             }
-            return false;
+
+            if (removed) QueueChanged?.Invoke();
+            return removed;
         }
 
-        // 6. Hàm tiện ích để biết bài tiếp theo là gì (Để hiển thị lên UI)
-        public Song PeekNextSong()
+        // ════════════════════════════════════════════════════════════════════
+        // 7. Nâng ưu tiên bài đang ở vị trí index lên đầu hàng
+        // ════════════════════════════════════════════════════════════════════
+        public bool PromoteSong(int index)
         {
-            if (_waitingList.Count > 0) return _waitingList[0];
-            return null;
+            lock (_lock)
+            {
+                if (index <= 0 || index >= _waitingList.Count) return false;
+
+                var song = _waitingList[index];
+                _waitingList.RemoveAt(index);
+                _waitingList.Insert(0, song);
+                Console.WriteLine($"[Queue] Đã nâng ưu tiên: {song.Title} lên đầu hàng");
+            }
+
+            QueueChanged?.Invoke();
+            return true;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // 8. Thuộc tính tiện ích — đọc nhanh số bài và trạng thái
+        // ════════════════════════════════════════════════════════════════════
+        public int Count
+        {
+            get { lock (_lock) { return _waitingList.Count; } }
+        }
+
+        public bool IsEmpty
+        {
+            get { lock (_lock) { return _waitingList.Count == 0; } }
+        }
+
+        public bool IsFull
+        {
+            get { lock (_lock) { return _waitingList.Count >= MaxQueueSize; } }
         }
     }
 }

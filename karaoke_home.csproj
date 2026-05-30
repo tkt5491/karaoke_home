@@ -15,9 +15,4 @@
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Admin\" />
-    <Folder Include="Session\" />
-  </ItemGroup>
-
 </Project>

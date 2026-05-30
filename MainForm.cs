@@ -1,7 +1,9 @@
 using QRCoder;
+using karaoke_home.Admin;
 using karaoke_home.Player;
 using karaoke_home.Queue;
 using karaoke_home.NAS;
+using karaoke_home.Session;
 using karaoke_home.Web;
 using System;
 using System.Drawing;
@@ -11,129 +13,166 @@ namespace karaoke_home
 {
     public partial class MainForm : Form
     {
+        // ════════════════════════════════════════════════════════════════════
+        // FIELDS
+        // ════════════════════════════════════════════════════════════════════
+
         private MediaPlayer _player;
         private QueueManager _queue;
         private NASScanner _scanner;
         private HttpServer _server;
+        private SessionManager _session;   // ← MỚI: quản lý session token cho QR
+        private AdminManager _admin;      // ← MỚI: quản lý quyền admin
+
         // BGM system
         private List<Song> _bgmList = new List<Song>();
         private int _bgmIndex = 0;
         private bool _isPlayingBGM = false;
 
+        // ════════════════════════════════════════════════════════════════════
+        // CONSTRUCTOR
+        // ════════════════════════════════════════════════════════════════════
+
         public MainForm()
         {
             InitializeComponent();
-            SetupUI();
-            LoadBGM();
-            // Khởi tạo các thành phần
+
+            // ── Bước 1: Tạo Session token trước tiên (dùng cho QR và HttpServer)
+            _session = new SessionManager();
+
+            // ── Bước 2: Tạo AdminManager và đăng ký các event quyền cao
+            _admin = new AdminManager();
+            _admin.OnRestartSessionRequested += Admin_RestartSession;
+            _admin.OnShutdownAppRequested += Admin_ShutdownApp;
+
+            // ── Bước 3: Khởi tạo các thành phần chính
             _queue = new QueueManager();
             _scanner = new NASScanner();
-
-            // Truyền panelCenter vào cho Player tự quản lý giao diện
             _player = new MediaPlayer(panelCenter);
 
-            // Đăng ký sự kiện: Khi bài hát kết thúc thì làm gì? -> Chuyển bài!
+            // ── Bước 4: Đăng ký event chuyển bài khi bài hát kết thúc
             _player.SongFinished += Player_SongFinished;
+            _player.SongStarted += (_, song) => {
+                var upNext = _queue.PeekNextSong();
+                UpdateUIInfo(song.Title, upNext?.Title ?? "(Trống)");
+            };
 
-            // TEST NHANH: Quét và bỏ thử 2 bài đầu tiên vào Queue rồi ép nó phát luôn
-            TestHarness();
+            // ── Bước 5: Load BGM
+            LoadBGM();
 
-            _server = new karaoke_home.Web.HttpServer(_player, _queue, _scanner);
+            // ── Bước 6: Khởi động HttpServer với đầy đủ dependencies
+            _server = new HttpServer(_player, _queue, _scanner, _session, _admin);
+            _server.OnNextRequested += PlayNextSongInQueue; // Fix bug: next từ web
             _server.Start("8888");
+
+            // ── Bước 7: Tạo QR Code trỏ đến URL có session token
+            SetupUI();
+
+            // ── Bước 8: Bắt đầu phát (BGM nếu queue trống)
             PlayNextSongInQueue();
+            //TestHarness();
         }
+
+        // ════════════════════════════════════════════════════════════════════
+        // FORM EVENTS
+        // ════════════════════════════════════════════════════════════════════
 
         private void MainForm_Load(object sender, EventArgs e)
         {
-            NAS.NASScanner scanner = new NAS.NASScanner();
-            List<NAS.Song> myLibrary = scanner.ScanSongs();
-
-            // In ra thử số lượng bài hát tìm được để test
-            MessageBox.Show($"Đã tìm thấy {myLibrary.Count} bài hát trong NAS!");
+            // Scan NAS async để không block UI thread khi mở app
+            Task.Run(() =>
+            {
+                var library = _scanner.GetSongs();
+                Console.WriteLine($"[MainForm] Thư viện: {library.Count} bài hát.");
+            });
         }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Dọn dẹp đúng thứ tự khi đóng app
+            _server.Stop();
+            _player.Dispose();
+            _scanner.Dispose();
+            base.OnFormClosing(e);
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // UI SETUP
+        // ════════════════════════════════════════════════════════════════════
 
         private void SetupUI()
         {
-            // Gọi hàm tạo QR Code ở đây
-            // Vì Nginx chứa Web UI sẽ nằm trên Ubuntu, ta trỏ thẳng URL về IP của Ubuntu
-            string webUrl = "http://192.168.0.230/";
+            // URL QR Code gồm IP Nginx + session token
+            // Token thay đổi mỗi lần khởi động → người lạ không đoán được
+            string nginxIp = "http://10.0.0.11"; // TODO: đọc từ config file
+            string webUrl = $"{nginxIp}/{_session.Token}/";
+
+            Console.WriteLine($"[MainForm] QR URL: {webUrl}");
             GenerateQRCode(webUrl);
         }
 
-        private void LoadBGM()
-        {
-            string bgmPath = @"C:\Users\tkt\Downloads\BGM";
-
-            if (!Directory.Exists(bgmPath)) return;
-
-            var files = Directory.GetFiles(bgmPath, "*.mp4");
-
-            foreach (var file in files)
-            {
-                _bgmList.Add(new Song(
-                    Path.GetFileNameWithoutExtension(file),
-                    "BGM",
-                    file
-                ));
-            }
-        }
-
-        // Hàm xử lý tạo hình ảnh QR Code
         private void GenerateQRCode(string url)
         {
             try
             {
                 QRCodeGenerator qrGenerator = new QRCodeGenerator();
-                // Khởi tạo dữ liệu QR (Mức Q - sửa lỗi 25% giúp điện thoại quét nhạy hơn)
                 QRCodeData qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
-
-                // Tạo ảnh Bitmap từ dữ liệu QR
                 QRCode qrCode = new QRCode(qrCodeData);
-                Bitmap qrCodeImage = qrCode.GetGraphic(5); // Số 5 là độ nét (Pixel/module)
+                Bitmap qrCodeImage = qrCode.GetGraphic(5);
 
-                // Đổ ảnh vào PictureBox trên giao diện (giả sử em đặt tên là picQRCode)
                 if (picQRCode != null)
                 {
                     picQRCode.Image = qrCodeImage;
-                    picQRCode.SizeMode = PictureBoxSizeMode.Zoom; // Ép ảnh vừa vặn với khung
+                    picQRCode.SizeMode = PictureBoxSizeMode.Zoom;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Lỗi QR] Không thể tạo mã QR: {ex.Message}");
+                Console.WriteLine($"[MainForm] Lỗi tạo QR: {ex.Message}");
             }
         }
 
-        private void Player_SongFinished(object sender, EventArgs e)
+        private void LoadBGM()
         {
-            // Hàm này tự kích hoạt khi bài trước hát xong
-            //PlayNextSongInQueue();
-            if (_isPlayingBGM)
+            string bgmPath = @"F:\BGM";
+            if (!Directory.Exists(bgmPath)) return;
+
+            foreach (var file in Directory.GetFiles(bgmPath, "*.mp4"))
             {
-                PlayNextBGM(); // 🔁 loop BGM
+                _bgmList.Add(new Song(
+                    Path.GetFileNameWithoutExtension(file), "BGM", file
+                ));
             }
-            else
-            {
-                PlayNextSongInQueue();
-            }
+
+            Console.WriteLine($"[MainForm] Loaded {_bgmList.Count} BGM tracks.");
         }
-        private void PlayNextSongInQueue()
+
+        // ════════════════════════════════════════════════════════════════════
+        // PLAYBACK LOGIC
+        // ════════════════════════════════════════════════════════════════════
+
+        private void Player_SongFinished(object? sender, EventArgs e)
         {
-            var nextSong = _queue.GetNextSong(); // Rút bài đầu tiên ra khỏi hàng chờ
+            if (_isPlayingBGM)
+                PlayNextBGM();
+            else
+                PlayNextSongInQueue();
+        }
+
+        public void PlayNextSongInQueue()
+        {
+            var nextSong = _queue.GetNextSong();
             if (nextSong != null)
             {
-                _isPlayingBGM = false; //
+                _isPlayingBGM = false;
                 _player.PlaySong(nextSong);
 
-                // Cập nhật dòng chữ trên UI
                 var upNext = _queue.PeekNextSong();
-                string upNextTitle = upNext != null ? upNext.Title : "(Trống)";
-                UpdateUIInfo(nextSong.Title, upNextTitle);
+                UpdateUIInfo(nextSong.Title, upNext?.Title ?? "(Trống)");
             }
             else
             {
-                //UpdateUIInfo("Chưa có bài hát", "(Trống)");
-                PlayNextBGM(); // fallback sang BGM
+                PlayNextBGM();
             }
         }
 
@@ -142,51 +181,100 @@ namespace karaoke_home
             if (_bgmList.Count == 0) return;
 
             _isPlayingBGM = true;
-
             var song = _bgmList[_bgmIndex];
             _player.PlaySong(song);
 
-            UpdateUIInfo($"🎧 NHẠC NỀN: {song.Title.ToUpper()}", "😒BẠN ĐÃ ORDER BÀI GÌ ĐÂU🤳QUÉT QR GÓC MÀN HÌNH RỒI CHỌN BÀI ĐI🎙");
+            UpdateUIInfo(
+                $"🎧 NHẠC NỀN: {song.Title.ToUpper()}",
+                "😒 BẠN ĐÃ ORDER BÀI GÌ ĐÂU 🤳 QUÉT QR GÓC MÀN HÌNH RỒI CHỌN BÀI ĐI 🎙"
+            );
 
             _bgmIndex = (_bgmIndex + 1) % _bgmList.Count;
         }
 
+        // ════════════════════════════════════════════════════════════════════
+        // ADMIN EVENT HANDLERS
+        // ════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// [Admin Nút 2] Reset phiên hát: dừng player, xóa queue, phát BGM.
+        /// Được gọi từ AdminManager qua ThreadPool → cần Invoke về UI thread.
+        /// </summary>
+        private void Admin_RestartSession()
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(Admin_RestartSession));
+                return;
+            }
+
+            Console.WriteLine("[MainForm] 🔁 Admin RestartSession: dừng player, xóa queue...");
+
+            _player.Stop();
+            _isPlayingBGM = false;
+
+            // Xóa sạch queue bằng cách lấy hết ra (QueueManager không có Clear API — có thể thêm sau)
+            while (_queue.GetNextSong() != null) { }
+
+            UpdateUIInfo("🔄 Phiên hát đã được reset", "(Trống)");
+            PlayNextBGM(); // Fallback sang BGM
+        }
+
+        /// <summary>
+        /// [Admin Nút 3] Tắt ứng dụng karaoke.
+        /// Được gọi từ AdminManager qua ThreadPool → cần Invoke về UI thread.
+        /// </summary>
+        private void Admin_ShutdownApp()
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(Admin_ShutdownApp));
+                return;
+            }
+
+            Console.WriteLine("[MainForm] ⏹ Admin ShutdownApp: đóng ứng dụng...");
+            Application.Exit();
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // UI HELPERS
+        // ════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Cập nhật label "Đang phát" và "Tiếp theo" trên UI.
+        /// Thread-safe: tự Invoke về UI thread nếu cần.
+        /// </summary>
         public void UpdateUIInfo(string nowPlaying, string nextSong)
         {
-            // Cần dùng Invoke nếu hàm này được gọi từ Thread khác (như HttpListener)
             if (this.InvokeRequired)
             {
                 this.Invoke(new Action(() => UpdateUIInfo(nowPlaying, nextSong)));
                 return;
             }
+
             lblNowPlaying.Text = $"Đang phát: {nowPlaying}";
             lblNextSong.Text = $"Tiếp theo: {nextSong}";
         }
 
+        // ════════════════════════════════════════════════════════════════════
+        // TEST HARNESS (Bỏ comment để test nhanh)
+        // ════════════════════════════════════════════════════════════════════
+
         private async void TestHarness()
         {
-            var songs = _scanner.ScanSongs();
-
-            // ❗ Đảm bảo có ít nhất 1 bài
+            var songs = _scanner.GetSongs();
             if (songs.Count == 0) return;
 
-            // 👉 Giai đoạn 1: KHÔNG add gì → để hệ thống tự chạy BGM
-            PlayNextSongInQueue();
+            PlayNextSongInQueue(); // Lúc đầu queue trống → phát BGM
 
-            // 👉 Giai đoạn 2: giả lập user order sau 5 giây
-            await Task.Delay(5000);
+            await Task.Delay(10000);
+            Console.WriteLine("🔥 [TEST] User order bài!");
 
-            Console.WriteLine("🔥 [TEST] User đã order bài!");
+            _queue.AddSong(songs[2]);
+            _queue.AddSong(songs[3]);
 
-            _queue.AddSong(songs[20]);
-            _queue.AddSong(songs[19]);
-
-            // ❗ QUAN TRỌNG: nếu đang BGM thì chuyển ngay
             if (_isPlayingBGM)
-            {
-                PlayNextSongInQueue();
-            }
+                PlayNextSongInQueue(); // Ngắt BGM, phát bài vừa order
         }
-
     }
 }
