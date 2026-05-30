@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Karaoke Remote</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & Base ───────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg:        #0d0d0d;
+    --surface:   #181818;
+    --surface2:  #222222;
+    --border:    rgba(255,255,255,0.08);
+    --border2:   rgba(255,255,255,0.14);
+    --text:      #f0ede6; 
+    --muted:     #888680;
+    --accent:    #e8c84a;      /* vàng karaoke */
+    --accent2:   #c94f2e;      /* đỏ cam priority */
+    --green:     #4caf7d;
+    --font-head: 'Barlow Condensed', sans-serif;
+    --font-body: 'Barlow', sans-serif;
+    --r:         10px;
+    --r-sm:      6px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    overscroll-behavior: none;
+  }
+
+  /* ── App shell ──────────────────────────────────────────────── */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  /* ── Top status bar ─────────────────────────────────────────── */
+  #status-bar {
+    flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  #status-bar .conn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    color: var(--muted);
+  }
+  #status-bar .conn .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    flex-shrink: 0;
+  }
+  #status-bar .conn .dot.off { background: #666; box-shadow: none; }
+  #conn-label { color: var(--text); }
+
+  #status-bar .now-playing {
+    flex: 1;
+    text-align: right;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #status-bar .now-playing span {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* ── Tab switcher ───────────────────────────────────────────── */
+  #tabs {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    padding: 11px;
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Scrollable content ─────────────────────────────────────── */
+  #content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 12px 0;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Search bar ─────────────────────────────────────────────── */
+  #search-wrap {
+    margin-bottom: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    padding: 4px 0 8px;
+  }
+  #search {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 10px 14px 10px 38px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    transition: border-color .15s;
+  }
+  #search::placeholder { color: var(--muted); }
+  #search:focus { border-color: var(--accent); }
+  .search-icon {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%) translateY(2px);
+    color: var(--muted);
+    pointer-events: none;
+    font-size: 15px;
+  }
+
+  /* ── Library grid — 2 cột ───────────────────────────────────── */
+  #library-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding-bottom: 8px;
+  }
+
+  .song-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color .15s, transform .1s;
+    cursor: pointer;
+  }
+  .song-card:active { transform: scale(.97); }
+
+  .song-thumb {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: var(--border2);
+    position: relative;
+    overflow: hidden;
+  }
+  .song-thumb .note-icon {
+    font-size: 32px;
+    opacity: .25;
+  }
+  /* Số thứ tự nhỏ góc */
+  .song-thumb .idx {
+    position: absolute;
+    top: 5px; left: 6px;
+    font-family: var(--font-head);
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,.3);
+    letter-spacing: .04em;
+  }
+
+  .song-info {
+    padding: 7px 8px 4px;
+    flex: 1;
+  }
+  .song-title {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+    margin-bottom: 1px;
+  }
+  .song-artist {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .song-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--border);
+  }
+  .song-actions .act-btn {
+    padding: 8px 4px;
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .song-actions .act-btn:first-child { border-right: 1px solid var(--border); }
+  .song-actions .act-btn:hover, .song-actions .act-btn:active { background: var(--surface2); color: var(--text); }
+  .song-actions .act-btn.priority:active { color: var(--accent2); }
+  .song-actions .act-btn.add:active { color: var(--accent); }
+
+  /* ── Ordered list ───────────────────────────────────────────── */
+  #ordered-header {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 6px 2px 10px;
+  }
+  #queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  .queue-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    transition: border-color .15s;
+    position: relative;
+  }
+  .queue-item.first-item { border-color: var(--accent); }
+  .queue-item.first-item .q-num { color: var(--accent); }
+
+  .q-num {
+    font-family: var(--font-head);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--border2);
+    min-width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .q-thumb {
+    width: 42px; height: 42px;
+    background: var(--surface2);
+    border-radius: var(--r-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .q-info { flex: 1; min-width: 0; }
+  .q-title {
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .q-artist { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  .q-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .q-btn {
+    width: 32px; height: 32px;
+    border-radius: var(--r-sm);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .12s, color .12s, border-color .12s;
+    flex-shrink: 0;
+  }
+  .q-btn:active { background: var(--border2); }
+  .q-btn.play-now { color: var(--accent); border-color: rgba(232,200,74,.2); }
+  .q-btn.promote  { color: #7eb8f5; border-color: rgba(126,184,245,.2); }
+  .q-btn.remove   { color: var(--accent2); border-color: rgba(201,79,46,.2); }
+
+  /* Empty states */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: .35; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── Bottom control bar ─────────────────────────────────────── */
+  #bottom-bar {
+    flex-shrink: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 12px calc(10px + var(--safe-bottom));
+  }
+
+  /* Progress row */
+  #progress-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  #progress-time {
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    min-width: 36px;
+  }
+  #progress-bar-wrap {
+    flex: 1;
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  #progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0%;
+    transition: width .5s linear;
+  }
+  #progress-dur { font-family: var(--font-head); font-size: 12px; color: var(--muted); min-width: 36px; text-align: right; }
+
+  /* Control buttons row 1 */
+  .ctrl-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .ctrl-btn {
+    flex: 1;
+    padding: 9px 2px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s, transform .1s;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .ctrl-btn:active { transform: scale(.95); background: var(--border2); color: var(--text); }
+  .ctrl-btn.accent { color: var(--accent); border-color: rgba(232,200,74,.25); }
+  .ctrl-btn.accent:active { background: rgba(232,200,74,.12); }
+  .ctrl-btn.active-state { background: rgba(232,200,74,.1); color: var(--accent); border-color: rgba(232,200,74,.35); }
+
+  /* ── Toast notification ─────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: calc(120px + var(--safe-bottom));
+    left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    padding: 8px 18px;
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    color: var(--text);
+    opacity: 0;
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 100;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: rgba(76,175,125,.4); color: var(--green); }
+  #toast.error   { border-color: rgba(201,79,46,.4);  color: var(--accent2); }
+
+  /* ── Scrollbar ──────────────────────────────────────────────── */
+  #content::-webkit-scrollbar { width: 3px; }
+  #content::-webkit-scrollbar-track { background: transparent; }
+  #content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* ── Loading skeleton ───────────────────────────────────────── */
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: var(--r-sm);
+  }
+
+  /* ── Spin animation for refresh ─────────────────────────────── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinning { animation: spin .6s linear; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Status bar ── -->
+  <div id="status-bar">
+    <div class="conn">
+      <div class="dot" id="conn-dot"></div>
+      <span id="conn-label">Đang kết nối...</span>
+    </div>
+    <div class="now-playing" id="now-playing-bar">
+      <span id="now-playing-text">Chưa có bài</span>
+    </div>
+  </div>
+
+  <!-- ── Tabs ── -->
+  <div id="tabs">
+    <button class="tab-btn active" data-tab="library" onclick="switchTab('library')">🎵 Thư Viện</button>
+    <button class="tab-btn" data-tab="ordered" onclick="switchTab('ordered')">📋 Hàng Chờ</button>
+  </div>
+
+  <!-- ── Content area ── -->
+  <div id="content">
+
+    <!-- Library Tab -->
+    <div id="tab-library" class="tab-panel active">
+      <div id="search-wrap" style="position:relative">
+        <span class="search-icon">🔍</span>
+        <input id="search" type="search" placeholder="Tìm kiếm bài hát, ca sĩ..." oninput="filterLibrary(this.value)" autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div id="library-grid">
+        <!-- Skeleton loading -->
+        <div class="song-card" id="skel-1"><div class="song-thumb skeleton"></div><div class="song-info"><div class="skeleton" style="height:12px;width:80%;margin-bottom:5px"></div><div class="skeleton" style="height:10px;width:55%"></div></div></div>
+        <div class="song-card" id="skel-2"><div class="song-thumb skeleton"></div><div class="song-info"><div class="skeleton" style="height:12px;width:70%;margin-bottom:5px"></div><div class="skeleton" style="height:10px;width:60%"></div></div></div>
+        <div class="song-card" id="skel-3"><div class="song-thumb skeleton"></div><div class="song-info"><div class="skeleton" style="height:12px;width:85%;margin-bottom:5px"></div><div class="skeleton" style="height:10px;width:50%"></div></div></div>
+        <div class="song-card" id="skel-4"><div class="song-thumb skeleton"></div><div class="song-info"><div class="skeleton" style="height:12px;width:75%;margin-bottom:5px"></div><div class="skeleton" style="height:10px;width:65%"></div></div></div>
+      </div>
+    </div>
+
+    <!-- Ordered Tab -->
+    <div id="tab-ordered" class="tab-panel">
+      <div id="ordered-header">Thứ Tự Phát Bài Hát Đã Chọn</div>
+      <div id="queue-list">
+        <div class="empty-state" id="queue-empty">
+          <div class="icon">🎤</div>
+          <p>Hàng chờ đang trống<br>Chọn bài từ thư viện để bắt đầu!</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Bottom control bar ── -->
+  <div id="bottom-bar">
+    <!-- Progress -->
+    <div id="progress-row">
+      <span id="progress-time">0:00</span>
+      <div id="progress-bar-wrap"><div id="progress-fill"></div></div>
+      <span id="progress-dur">0:00</span>
+    </div>
+    <!-- Row 1: playback controls -->
+    <div class="ctrl-row">
+      <button class="ctrl-btn" onclick="seekBackward()" title="Tua lùi 5 giây">-5s</button>
+      <button class="ctrl-btn" onclick="seekForward()"  title="Tua tới 5 giây">+5s</button>
+      <button class="ctrl-btn accent" onclick="nextSong()" title="Bỏ qua bài">Next</button>
+      <button class="ctrl-btn" id="btn-pause" onclick="togglePause()" title="Tạm dừng / Tiếp tục">P/P</button>
+      <button class="ctrl-btn" id="btn-loop"  onclick="toggleLoop()"  title="Lặp lại bài">Loop</button>
+    </div>
+    <!-- Row 2: utility buttons -->
+    <div class="ctrl-row">
+      <button class="ctrl-btn" onclick="refreshLibrary()" title="Tải lại thư viện NAS" id="btn-nas">NAS</button>
+      <button class="ctrl-btn accent" onclick="volumeUp()"   title="Tăng âm lượng">VOL+</button>
+      <button class="ctrl-btn" onclick="volumeDown()" title="Giảm âm lượng">VOL-</button>
+      <button class="ctrl-btn" onclick="switchTab('ordered')" title="Xem hàng chờ">ORDERED</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ================================================================
+//  CONFIG — Tự động lấy token từ URL path
+//  URL format: http://[nginx-ip]/[token]/
+//  Ví dụ: http://192.168.0.230/a3f9bc12/
+// ================================================================
+const PATH_PARTS  = location.pathname.split('/').filter(Boolean);
+const TOKEN       = PATH_PARTS[0] || '';          // "a3f9bc12"
+const API_BASE    = `${location.origin}/${TOKEN}`; // dùng cùng host (qua Nginx)
+
+// Nếu chạy trực tiếp trên port 8888 (không qua Nginx), dùng dòng dưới:
+// const API_BASE = `http://192.168.0.100:8888/${TOKEN}`;
+
+// ================================================================
+//  STATE
+// ================================================================
+let allSongs      = [];   // Toàn bộ thư viện
+let filteredSongs = [];   // Sau khi search
+let queueList     = [];   // Hàng chờ hiện tại
+let isPaused      = false;
+let isLooping     = false;
+let pollTimer     = null;
+
+// ================================================================
+//  INIT
+// ================================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadLibrary();
+  await pollQueue();
+  startPolling();
+});
+
+// ================================================================
+//  API HELPERS
+// ================================================================
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: {} };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(`${API_BASE}${path}`, opts);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('application/json') ? res.json() : null;
+}
+
+// ================================================================
+//  CONNECTION STATUS
+// ================================================================
+function setConnected(ok, label = '') {
+  document.getElementById('conn-dot').classList.toggle('off', !ok);
+  document.getElementById('conn-label').textContent = ok ? label : 'Mất kết nối';
+}
+
+// ================================================================
+//  LIBRARY
+// ================================================================
+async function loadLibrary() {
+  try {
+    const songs = await api('/api/songs');
+    allSongs = songs || [];
+    filteredSongs = [...allSongs];
+    renderLibrary(filteredSongs);
+    const ip = location.hostname;
+    setConnected(true, `Đã kết nối: ${ip}`);
+  } catch (e) {
+    setConnected(false);
+    showToast('Không thể tải thư viện', 'error');
+    // Xóa skeleton
+    document.getElementById('library-grid').innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="icon">⚠️</div>
+        <p>Không kết nối được server<br>Kiểm tra lại mạng và thử lại</p>
+      </div>`;
+  }
+}
+
+async function refreshLibrary() {
+  const btn = document.getElementById('btn-nas');
+  btn.classList.add('spinning');
+  btn.textContent = '...';
+  try {
+    await loadLibrary();
+    showToast(`Đã tải ${allSongs.length} bài`, 'success');
+  } catch (e) {
+    showToast('Tải lại thất bại', 'error');
+  } finally {
+    btn.classList.remove('spinning');
+    btn.textContent = 'NAS';
+  }
+}
+
+function filterLibrary(query) {
+  const q = query.trim().toLowerCase();
+  filteredSongs = q
+    ? allSongs.filter(s =>
+        s.title.toLowerCase().includes(q) ||
+        s.artist.toLowerCase().includes(q))
+    : [...allSongs];
+  renderLibrary(filteredSongs);
+}
+
+function renderLibrary(songs) {
+  const grid = document.getElementById('library-grid');
+  if (songs.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="icon">🔍</div><p>Không tìm thấy bài hát nào</p></div>`;
+    return;
+  }
+  grid.innerHTML = songs.map((s, i) => `
+    <div class="song-card">
+      <div class="song-thumb">
+        <span class="note-icon">♪</span>
+        <span class="idx">${i + 1}</span>
+      </div>
+      <div class="song-info">
+        <div class="song-title" title="${esc(s.title)}">${esc(s.title)}</div>
+        <div class="song-artist">${esc(s.artist)}</div>
+      </div>
+      <div class="song-actions">
+        <button class="act-btn add"      onclick="addToQueue('${esc(s.filePath)}','${esc(s.title)}')">Chọn</button>
+        <button class="act-btn priority" onclick="addPriority('${esc(s.filePath)}','${esc(s.title)}')">Ưu tiên</button>
+      </div>
+    </div>`).join('');
+}
+
+// ================================================================
+//  QUEUE
+// ================================================================
+async function pollQueue() {
+  try {
+    const status = await api('/api/player/status');
+    const queue  = await api('/api/queue');
+    queueList = queue || [];
+    renderQueue(queueList);
+    if (status) updateNowPlaying(status);
+    setConnected(true, `Đã kết nối: ${location.hostname}`);
+  } catch (e) {
+    setConnected(false);
+  }
+}
+
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(pollQueue, 3000); // Poll mỗi 3 giây
+}
+
+function renderQueue(queue) {
+  const list  = document.getElementById('queue-list');
+  const empty = document.getElementById('queue-empty');
+
+  if (queue.length === 0) {
+    list.innerHTML = '';
+    list.appendChild(empty);
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.innerHTML = queue.map((s, i) => `
+    <div class="queue-item ${i === 0 ? 'first-item' : ''}">
+      <div class="q-num">${i + 1}</div>
+      <div class="q-thumb">♪</div>
+      <div class="q-info">
+        <div class="q-title">${esc(s.title)}</div>
+        <div class="q-artist">${esc(s.artist)}</div>
+      </div>
+      <div class="q-actions">
+        ${i !== 0 ? `<button class="q-btn play-now" title="Hát luôn" onclick="playNow(${i})">▶</button>` : ''}
+        ${i !== 0 ? `<button class="q-btn promote" title="Ưu tiên lên đầu" onclick="promoteInQueue(${i})">↑</button>` : ''}
+        <button class="q-btn remove" title="Xóa khỏi hàng chờ" onclick="removeFromQueue(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function updateNowPlaying(status) {
+  // status có thể có currentSong nếu backend expose sau này
+  const count = status.queueCount ?? 0;
+  document.getElementById('now-playing-text').textContent =
+    count > 0 ? `${count} bài trong hàng` : 'Hàng chờ trống';
+}
+
+// ================================================================
+//  QUEUE ACTIONS
+// ================================================================
+async function addToQueue(filePath, title) {
+  try {
+    await api(`/api/queue/add?path=${encodeURIComponent(filePath)}`, 'POST');
+    showToast(`Đã thêm: ${title}`, 'success');
+    await pollQueue();
+  } catch (e) {
+    const msg = e.message.includes('429') ? 'Hàng chờ đã đầy!' : 'Thêm bài thất bại';
+    showToast(msg, 'error');
+  }
+}
+
+async function addPriority(filePath, title) {
+  try {
+    await api(`/api/queue/add_priority?path=${encodeURIComponent(filePath)}`, 'POST');
+    showToast(`Ưu tiên: ${title}`, 'success');
+    await pollQueue();
+    switchTab('ordered');
+  } catch (e) {
+    showToast('Ưu tiên thất bại', 'error');
+  }
+}
+
+async function removeFromQueue(index) {
+  try {
+    await api(`/api/queue/remove?index=${index}`, 'POST');
+    await pollQueue();
+    showToast('Đã xóa khỏi hàng chờ', 'success');
+  } catch (e) {
+    showToast('Xóa thất bại', 'error');
+  }
+}
+
+async function promoteInQueue(index) {
+  try {
+    await api(`/api/queue/promote?index=${index}`, 'POST');
+    await pollQueue();
+    showToast('Đã nâng lên đầu hàng', 'success');
+  } catch (e) {
+    showToast('Thất bại', 'error');
+  }
+}
+
+// "Hát luôn": promote lên đầu + next để phát ngay
+async function playNow(index) {
+  try {
+    await api(`/api/queue/promote?index=${index}`, 'POST');
+    await api('/api/player/next', 'POST');
+    await pollQueue();
+    showToast('Đang phát ngay...', 'success');
+  } catch (e) {
+    showToast('Thất bại', 'error');
+  }
+}
+
+// ================================================================
+//  PLAYER CONTROLS
+// ================================================================
+async function nextSong() {
+  try {
+    await api('/api/player/next', 'POST');
+    showToast('Chuyển bài tiếp theo', 'success');
+    setTimeout(pollQueue, 800);
+  } catch (e) { showToast('Lỗi', 'error'); }
+}
+
+async function togglePause() {
+  try {
+    await api('/api/player/pause', 'POST');
+    isPaused = !isPaused;
+    const btn = document.getElementById('btn-pause');
+    btn.textContent = isPaused ? '▶' : 'P/P';
+    btn.classList.toggle('active-state', isPaused);
+    showToast(isPaused ? 'Tạm dừng' : 'Tiếp tục', 'success');
+  } catch (e) { showToast('Lỗi', 'error'); }
+}
+
+function toggleLoop() {
+  isLooping = !isLooping;
+  const btn = document.getElementById('btn-loop');
+  btn.classList.toggle('active-state', isLooping);
+  // TODO: gọi API /api/player/loop khi backend hỗ trợ
+  showToast(isLooping ? 'Bật lặp lại' : 'Tắt lặp lại', 'success');
+}
+
+async function seekForward() {
+  try {
+    await api('/api/player/seekforward', 'POST');
+  } catch (e) { showToast('Lỗi tua', 'error'); }
+}
+
+async function seekBackward() {
+  try {
+    await api('/api/player/seekbackward', 'POST');
+  } catch (e) { showToast('Lỗi tua', 'error'); }
+}
+
+async function volumeUp() {
+  try {
+    await api('/api/player/volup', 'POST');
+    showToast('🔊 Tăng âm lượng', 'success');
+  } catch (e) { showToast('Lỗi', 'error'); }
+}
+
+async function volumeDown() {
+  try {
+    await api('/api/player/voldown', 'POST');
+    showToast('🔉 Giảm âm lượng', 'success');
+  } catch (e) { showToast('Lỗi', 'error'); }
+}
+
+// ================================================================
+//  UI HELPERS
+// ================================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'ordered') pollQueue();
+}
+
+let toastTimer = null;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = type ? `show ${type}` : 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 2000);
+}
+
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>
