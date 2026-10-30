@@ -4,17 +4,17 @@
 
   // Thư mục video chờ (BGM) — lấy theo đường dẫn cũ, đổi nếu đã chuyển chỗ.
   // Trong JSON, dấu "\" phải viết thành "\\"
-  "BgmFolder": "Y:\\TruongKimThanh\\C#_Project\\BGM",
+  "BgmFolder": "Y:\\BGM",
 
   // F1 — file nằm ngay trên máy Client
-  "LocalTestFile": "Y:\\TruongKimThanh\\C#_Project\\Artist\\Ho Viet Trung",
+  "LocalTestFile": "Y:\\Artist\\HKT\\HKT - Tru Mua - Karaoke.mp4",
 
   // F2 — file trên NAS, tính từ \\<ServerHost>\NAS
-  "NasTestFile": "Movies\\Mai (2024)\\Mai (2024).mp4",
+  "NasTestFile": "Movies\\NNCA_MV.mp4",
 
   // F3 — chạy trên server, dán 2 dòng in ra vào đây (dòng 1 = hình, dòng 2 = tiếng):
   //   yt-dlp -g -f "bv*[height<=720]+ba/b" "https://www.youtube.com/watch?v=<id>"
   // Link có tham số expire= và hết hạn sau vài giờ → lỗi thì lấy link mới dán lại
-  "YtVideoUrl": "",
-  "YtAudioUrl": ""
+  "YtVideoUrl": "https://rr1---sn-42u-nbozz.googlevideo.com/videoplayback?expire=1793391416&ei=2KbkatDnLN29vcAPhsCmwQ4&ip=118.69.225.43&id=o-AL3lq3GRC8nC2xiiYKqRU96Nu87S0dCZ1yiYZ2dwACpx&itag=136&aitags=133%2C134%2C135%2C136%2C137%2C160%2C242%2C243%2C244%2C247%2C248%2C278%2C394%2C395%2C396%2C397%2C398%2C399&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=352&met=1793369816%2C&mh=f-&mm=31%2C26&mn=sn-42u-nbozz%2Csn-2o30ac-5b&ms=au%2Conr&mv=m&mvi=1&pl=24&rms=au%2Cau&pcm2=no&initcwndbps=3263250&bui=AZFAFb_GZBCT_hbCtjszOh61URs8E-2pDY7JbgDV6LV97l49A1ivfa7gMA7tXmvMienMZTTp7GhUjwFz&vprv=1&svpuc=1&mime=video%2Fmp4&ns=d5pxQxKAR1OS92TrizbG3d0Z&rqh=1&gir=yes&clen=14874690&dur=259.666&lmt=1736007693564135&mt=1793369414&fvip=2&epbp=1&keepalive=yes&lmw=1&fexp=51565115%2C52184236%2C52271469&c=TVHTML5&sefc=1&txp=5535434&n=74JZ3GNs8nbIUA&sparams=expire%2Cei%2Cip%2Cid%2Caitags%2Csource%2Crequiressl%2Cxpc%2Cpcm2%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAO2I9xEmVPKCdHEVPN-6yuy4kYwEMsJT6pO-1kUte_nUAiEAqTMs745JiCkY2QLSQi_7hhexgMa7w_QzTnibfthmYO0%3D&sig=AE0s2JYwRQIgavoZ00QVdmOdLshzRJXNv01ye3oDu7n2vx10Im9rurECIQDWDII7-FJQJGVmHY5suW646j1d89TAfMVHC7f2nMbhew%3D%3D",
+  "YtAudioUrl": "https://rr1---sn-42u-nbozz.googlevideo.com/videoplayback?expire=1793391416&ei=2KbkatDnLN29vcAPhsCmwQ4&ip=118.69.225.43&id=o-AL3lq3GRC8nC2xiiYKqRU96Nu87S0dCZ1yiYZ2dwACpx&itag=140&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=352&met=1793369816%2C&mh=f-&mm=31%2C26&mn=sn-42u-nbozz%2Csn-2o30ac-5b&ms=au%2Conr&mv=m&mvi=1&pl=24&rms=au%2Cau&pcm2=no&initcwndbps=3263250&bui=AZFAFb_GZBCT_hbCtjszOh61URs8E-2pDY7JbgDV6LV97l49A1ivfa7gMA7tXmvMienMZTTp7GhUjwFz&vprv=1&svpuc=1&mime=audio%2Fmp4&ns=d5pxQxKAR1OS92TrizbG3d0Z&rqh=1&gir=yes&clen=4204070&dur=259.715&lmt=1736004269104154&mt=1793369414&fvip=2&epbp=1&keepalive=yes&lmw=1&fexp=51565115%2C52184236%2C52271469&c=TVHTML5&sefc=1&txp=5532434&n=74JZ3GNs8nbIUA&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cpcm2%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAO2I9xEmVPKCdHEVPN-6yuy4kYwEMsJT6pO-1kUte_nUAiEAqTMs745JiCkY2QLSQi_7hhexgMa7w_QzTnibfthmYO0%3D&sig=AE0s2JYwRQIgab12sYHiAqU-ufwU6Uy4DKW_GUbsjv4u8oUYiZ424ZwCIQC3fn5-QxTdTl4qQUlTr0lMKu9LK7C9Q9RCUD6EOkKxsw%3D%3D"
 }

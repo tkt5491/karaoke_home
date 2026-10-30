@@ -96,9 +96,13 @@ namespace karaoke_home
                 return;
             }
 
+            // URL stream không có "tên file" — cắt bằng Path sẽ ra nguyên chuỗi query (kèm IP public)
+            var isUrl = source.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+            var title = isUrl ? $"[{name}] stream" : $"[{name}] {Path.GetFileNameWithoutExtension(source)}";
+
             _isPlayingBGM = false;
-            if (!_player.Play(source, string.IsNullOrWhiteSpace(audio) ? null : audio, $"[{name}] {Path.GetFileNameWithoutExtension(source)}"))
-                UpdateUIInfo($"⚠️ Không mở được nguồn {name}", source);
+            if (!_player.Play(source, string.IsNullOrWhiteSpace(audio) ? null : audio, title))
+                UpdateUIInfo($"⚠️ Không mở được nguồn {name}", isUrl ? "(link stream)" : source);
         }
 
         private void LoadBGM()

@@ -27,6 +27,8 @@ namespace karaoke_home.Player
         private readonly LibVLCSharp.Shared.MediaPlayer _vlcPlayer;
         private readonly VideoView                      _videoView;
 
+        private readonly System.Diagnostics.Stopwatch _startWatch = new();
+
         private volatile string? _currentTitle;
         private bool _disposed;
 
@@ -104,6 +106,7 @@ namespace karaoke_home.Player
                 media.AddOption(":network-caching=1500");             // đệm 1.5 giây cho stream
 
             _currentTitle = displayTitle;
+            _startWatch.Restart();
             var ok = _vlcPlayer.Play(media);
 
             Console.WriteLine($"[MediaPlayer] ▶ {displayTitle} ({(isNetwork ? "stream" : "file")}" +
@@ -157,6 +160,13 @@ namespace karaoke_home.Player
                 Console.WriteLine($"[MediaPlayer] 🏁 Hết bài: {_currentTitle}");
                 _currentTitle = null;
                 ThreadPool.QueueUserWorkItem(_ => SongFinished?.Invoke(this, EventArgs.Empty));
+            };
+
+            _vlcPlayer.Playing += (_, _) =>
+            {
+                if (!_startWatch.IsRunning) return;   // chỉ đo lần đầu; pause → resume cũng bắn Playing
+                _startWatch.Stop();
+                Console.WriteLine($"[MediaPlayer] ⏱ Bắt đầu phát sau {_startWatch.ElapsedMilliseconds} ms: {_currentTitle}");
             };
 
             _vlcPlayer.EncounteredError += (_, _) =>
