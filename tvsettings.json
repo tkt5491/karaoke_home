@@ -1,0 +1,20 @@
+{
+  // Đổi mạng (công ty → nhà): chỉ sửa dòng này, không cần build lại
+  "ServerHost": "192.168.3.88",
+
+  // Thư mục video chờ (BGM) — lấy theo đường dẫn cũ, đổi nếu đã chuyển chỗ.
+  // Trong JSON, dấu "\" phải viết thành "\\"
+  "BgmFolder": "Y:\\TruongKimThanh\\C#_Project\\BGM",
+
+  // F1 — file nằm ngay trên máy Client
+  "LocalTestFile": "Y:\\TruongKimThanh\\C#_Project\\Artist\\Ho Viet Trung",
+
+  // F2 — file trên NAS, tính từ \\<ServerHost>\NAS
+  "NasTestFile": "Movies\\Mai (2024)\\Mai (2024).mp4",
+
+  // F3 — chạy trên server, dán 2 dòng in ra vào đây (dòng 1 = hình, dòng 2 = tiếng):
+  //   yt-dlp -g -f "bv*[height<=720]+ba/b" "https://www.youtube.com/watch?v=<id>"
+  // Link có tham số expire= và hết hạn sau vài giờ → lỗi thì lấy link mới dán lại
+  "YtVideoUrl": "",
+  "YtAudioUrl": ""
+}

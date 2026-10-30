@@ -1,239 +1,184 @@
+// ============================================================
+//  MainForm.cs  (Tuần 6 — Thin-Client)
+//  Chỉ còn: phát video full màn hình Tivi, video chờ (BGM), QR, phím tắt test.
+//  Đã bỏ: HttpServer, QueueManager, SessionManager, AdminManager, NASScanner
+//         → "não" chuyển lên Backend; Tuần 7 nối SignalR vào đây.
+//
+//  Quy tắc thread: MỌI logic điều khiển chạy trên UI thread.
+//  Event từ MediaPlayer đến từ ThreadPool → đưa về bằng RunOnUi (BeginInvoke).
+//  Tuần 7, handler SignalR cũng đi đúng đường này.
+//
+//  Phím tắt (để nghiệm thu khi chưa có Web App):
+//    F1 file cục bộ | F2 file NAS | F3 stream yt-dlp | B bài chờ tiếp theo
+//    Space pause    | ← → tua 5s  | ↑ ↓ âm lượng     | F11 bật/tắt full màn hình
+// ============================================================
+
 using QRCoder;
-using karaoke_home.Admin;
 using karaoke_home.Player;
-using karaoke_home.Queue;
-using karaoke_home.NAS;
-using karaoke_home.Session;
-using karaoke_home.Web;
-using System;
-using System.Drawing;
-using System.Windows.Forms;
 
 namespace karaoke_home
 {
     public partial class MainForm : Form
     {
-        // ════════════════════════════════════════════════════════════════════
-        // FIELDS
-        // ════════════════════════════════════════════════════════════════════
+        private readonly TvSettings  _settings;
+        private readonly MediaPlayer _player;
 
-        private MediaPlayer _player;
-        private QueueManager _queue;
-        private NASScanner _scanner;
-        private HttpServer _server;
-        private SessionManager _session;   // ← MỚI: quản lý session token cho QR
-        private AdminManager _admin;      // ← MỚI: quản lý quyền admin
-
-        // BGM system
-        private List<Song> _bgmList = new List<Song>();
-        private int _bgmIndex = 0;
-        private bool _isPlayingBGM = false;
+        private readonly List<string> _bgmFiles = new();
+        private int  _bgmIndex;
+        private bool _isPlayingBGM;
+        private bool _isFullScreen;
 
         // ════════════════════════════════════════════════════════════════════
-        // CONSTRUCTOR
-        // ════════════════════════════════════════════════════════════════════
-
         public MainForm()
         {
             InitializeComponent();
 
-            // ── Bước 1: Tạo Session token trước tiên (dùng cho QR và HttpServer)
-            _session = new SessionManager();
+            _settings = TvSettings.Load();
+            _player   = new MediaPlayer(panelCenter);
 
-            // ── Bước 2: Tạo AdminManager và đăng ký các event quyền cao
-            _admin = new AdminManager();
-            _admin.OnRestartSessionRequested += Admin_RestartSession;
-            _admin.OnShutdownAppRequested += Admin_ShutdownApp;
+            _player.SongStarted   += (_, title) => RunOnUi(() => OnSongStarted(title));
+            _player.SongFinished  += (_, _)     => RunOnUi(OnSongFinished);
+            _player.PlaybackError += (_, title) => RunOnUi(() => OnPlaybackError(title));
 
-            // ── Bước 3: Khởi tạo các thành phần chính
-            _queue = new QueueManager();
-            _scanner = new NASScanner();
-            _player = new MediaPlayer(panelCenter);
-
-            // ── Bước 4: Đăng ký event chuyển bài khi bài hát kết thúc
-            _player.SongFinished += Player_SongFinished;
-            _player.SongStarted += (_, song) => {
-                var upNext = _queue.PeekNextSong();
-                UpdateUIInfo(song.Title, upNext?.Title ?? "(Trống)");
-            };
-
-            // ── Bước 5: Load BGM
             LoadBGM();
-
-            // ── Bước 6: Khởi động HttpServer với đầy đủ dependencies
-            _server = new HttpServer(_player, _queue, _scanner, _session, _admin);
-            _server.OnNextRequested += PlayNextSongInQueue; // Fix bug: next từ web
-            _server.Start("8888");
-
-            // ── Bước 7: Tạo QR Code trỏ đến URL có session token
-            SetupUI();
-
-            // ── Bước 8: Bắt đầu phát (BGM nếu queue trống)
-            PlayNextSongInQueue();
-            //TestHarness();
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // FORM EVENTS
-        // ════════════════════════════════════════════════════════════════════
-
+        // Load chạy khi Form đã có handle → lúc này BeginInvoke mới dùng được
+        // (gọi BeginInvoke trong constructor sẽ ném InvalidOperationException)
         private void MainForm_Load(object sender, EventArgs e)
         {
-            // Scan NAS async để không block UI thread khi mở app
-            Task.Run(() =>
-            {
-                var library = _scanner.GetSongs();
-                Console.WriteLine($"[MainForm] Thư viện: {library.Count} bài hát.");
-            });
+            GenerateQRCode(_settings.WebAppUrl);
+            SetFullScreen(true);
+            PlayNextBGM();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // Dọn dẹp đúng thứ tự khi đóng app
-            _server.Stop();
+            if (_isFullScreen) Cursor.Show();
             _player.Dispose();
-            _scanner.Dispose();
             base.OnFormClosing(e);
         }
 
         // ════════════════════════════════════════════════════════════════════
-        // UI SETUP
+        // XỬ LÝ SỰ KIỆN PLAYER (đã ở UI thread)
         // ════════════════════════════════════════════════════════════════════
 
-        private void SetupUI()
+        private void OnSongStarted(string title)
         {
-            // URL QR Code gồm IP Nginx + session token
-            // Token thay đổi mỗi lần khởi động → người lạ không đoán được
-            string nginxIp = "http://10.0.0.11"; // TODO: đọc từ config file
-            string webUrl = $"{nginxIp}/{_session.Token}/";
-
-            Console.WriteLine($"[MainForm] QR URL: {webUrl}");
-            GenerateQRCode(webUrl);
+            if (_isPlayingBGM)
+                UpdateUIInfo($"🎧 NHẠC CHỜ: {title}", "Quét QR góc màn hình để chọn bài 🎙");
+            else
+                UpdateUIInfo(title, "(Tuần 7: lấy từ hàng đợi trên server)");
         }
 
-        private void GenerateQRCode(string url)
+        private void OnSongFinished()
         {
-            try
-            {
-                QRCodeGenerator qrGenerator = new QRCodeGenerator();
-                QRCodeData qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
-                QRCode qrCode = new QRCode(qrCodeData);
-                Bitmap qrCodeImage = qrCode.GetGraphic(5);
+            Console.WriteLine($"[MainForm] {DateTime.Now:HH:mm:ss} hết bài → quay về nhạc chờ");
+            PlayNextBGM();   // Tuần 6 chưa có hàng đợi: hết bài thì về video chờ
+        }
 
-                if (picQRCode != null)
-                {
-                    picQRCode.Image = qrCodeImage;
-                    picQRCode.SizeMode = PictureBoxSizeMode.Zoom;
-                }
-            }
-            catch (Exception ex)
+        private async void OnPlaybackError(string title)
+        {
+            UpdateUIInfo($"⚠️ Không phát được: {title}", "Link yt-dlp hết hạn? Kiểm tra tvsettings.json — 3 giây nữa về nhạc chờ");
+            await Task.Delay(3000);     // await trên UI thread: không chặn giao diện, chạy tiếp vẫn ở UI thread
+            if (!IsDisposed) PlayNextBGM();
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // PHÁT
+        // ════════════════════════════════════════════════════════════════════
+
+        private void PlayTest(string name, string source, string? audio = null)
+        {
+            if (string.IsNullOrWhiteSpace(source))
             {
-                Console.WriteLine($"[MainForm] Lỗi tạo QR: {ex.Message}");
+                UpdateUIInfo($"Chưa cấu hình nguồn {name}", "Điền vào tvsettings.json cạnh file .exe");
+                return;
             }
+
+            _isPlayingBGM = false;
+            if (!_player.Play(source, string.IsNullOrWhiteSpace(audio) ? null : audio, $"[{name}] {Path.GetFileNameWithoutExtension(source)}"))
+                UpdateUIInfo($"⚠️ Không mở được nguồn {name}", source);
         }
 
         private void LoadBGM()
         {
-            string bgmPath = @"F:\BGM";
-            if (!Directory.Exists(bgmPath)) return;
-
-            foreach (var file in Directory.GetFiles(bgmPath, "*.mp4"))
+            if (!Directory.Exists(_settings.BgmFolder))
             {
-                _bgmList.Add(new Song(
-                    Path.GetFileNameWithoutExtension(file), "BGM", file
-                ));
+                Console.WriteLine($"[MainForm] Không thấy thư mục BGM: {_settings.BgmFolder}");
+                return;
             }
 
-            Console.WriteLine($"[MainForm] Loaded {_bgmList.Count} BGM tracks.");
-        }
+            _bgmFiles.AddRange(Directory.EnumerateFiles(_settings.BgmFolder)
+                .Where(f => f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+                         || f.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f));
 
-        // ════════════════════════════════════════════════════════════════════
-        // PLAYBACK LOGIC
-        // ════════════════════════════════════════════════════════════════════
-
-        private void Player_SongFinished(object? sender, EventArgs e)
-        {
-            if (_isPlayingBGM)
-                PlayNextBGM();
-            else
-                PlayNextSongInQueue();
-        }
-
-        public void PlayNextSongInQueue()
-        {
-            var nextSong = _queue.GetNextSong();
-            if (nextSong != null)
-            {
-                _isPlayingBGM = false;
-                _player.PlaySong(nextSong);
-
-                var upNext = _queue.PeekNextSong();
-                UpdateUIInfo(nextSong.Title, upNext?.Title ?? "(Trống)");
-            }
-            else
-            {
-                PlayNextBGM();
-            }
+            Console.WriteLine($"[MainForm] {_bgmFiles.Count} video chờ.");
         }
 
         private void PlayNextBGM()
         {
-            if (_bgmList.Count == 0) return;
+            if (_bgmFiles.Count == 0)
+            {
+                _player.Stop();
+                UpdateUIInfo("Chưa có video chờ", $"Kiểm tra BgmFolder: {_settings.BgmFolder}");
+                return;
+            }
 
             _isPlayingBGM = true;
-            var song = _bgmList[_bgmIndex];
-            _player.PlaySong(song);
-
-            UpdateUIInfo(
-                $"🎧 NHẠC NỀN: {song.Title.ToUpper()}",
-                "😒 BẠN ĐÃ ORDER BÀI GÌ ĐÂU 🤳 QUÉT QR GÓC MÀN HÌNH RỒI CHỌN BÀI ĐI 🎙"
-            );
-
-            _bgmIndex = (_bgmIndex + 1) % _bgmList.Count;
+            var file = _bgmFiles[_bgmIndex];
+            _bgmIndex = (_bgmIndex + 1) % _bgmFiles.Count;
+            _player.Play(file);
         }
 
         // ════════════════════════════════════════════════════════════════════
-        // ADMIN EVENT HANDLERS
+        // PHÍM TẮT — dùng ProcessCmdKey thay vì KeyDown:
+        // KeyDown không nhận được phím mũi tên (Windows dùng chúng để chuyển focus).
         // ════════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// [Admin Nút 2] Reset phiên hát: dừng player, xóa queue, phát BGM.
-        /// Được gọi từ AdminManager qua ThreadPool → cần Invoke về UI thread.
-        /// </summary>
-        private void Admin_RestartSession()
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (this.InvokeRequired)
+            switch (keyData)
             {
-                this.Invoke(new Action(Admin_RestartSession));
-                return;
+                case Keys.F1:    PlayTest("Local", _settings.LocalTestFile); return true;
+                case Keys.F2:    PlayTest("NAS",   _settings.NasTestPath);   return true;
+                case Keys.F3:    PlayTest("YouTube", _settings.YtVideoUrl, _settings.YtAudioUrl); return true;
+                case Keys.B:     PlayNextBGM();            return true;
+                case Keys.Space: _player.PauseOrResume();  return true;
+                case Keys.Right: _player.SeekForward();    return true;
+                case Keys.Left:  _player.SeekBackward();   return true;
+                case Keys.Up:    _player.VolumeUp();       return true;
+                case Keys.Down:  _player.VolumeDown();     return true;
+                case Keys.F11:   SetFullScreen(!_isFullScreen); return true;
             }
-
-            Console.WriteLine("[MainForm] 🔁 Admin RestartSession: dừng player, xóa queue...");
-
-            _player.Stop();
-            _isPlayingBGM = false;
-
-            // Xóa sạch queue bằng cách lấy hết ra (QueueManager không có Clear API — có thể thêm sau)
-            while (_queue.GetNextSong() != null) { }
-
-            UpdateUIInfo("🔄 Phiên hát đã được reset", "(Trống)");
-            PlayNextBGM(); // Fallback sang BGM
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        /// <summary>
-        /// [Admin Nút 3] Tắt ứng dụng karaoke.
-        /// Được gọi từ AdminManager qua ThreadPool → cần Invoke về UI thread.
-        /// </summary>
-        private void Admin_ShutdownApp()
+        // ════════════════════════════════════════════════════════════════════
+        // FULL MÀN HÌNH — ưu tiên màn hình phụ (Tivi), không có thì dùng màn hình chính
+        // ════════════════════════════════════════════════════════════════════
+        private void SetFullScreen(bool on)
         {
-            if (this.InvokeRequired)
+            if (on == _isFullScreen) return;   // Cursor.Hide/Show có đếm số lần → phải cân bằng
+
+            if (on)
             {
-                this.Invoke(new Action(Admin_ShutdownApp));
-                return;
+                var tv = Screen.AllScreens.FirstOrDefault(s => !s.Primary) ?? Screen.PrimaryScreen!;
+                WindowState     = FormWindowState.Normal;   // đang Maximized thì đổi Bounds không có tác dụng
+                FormBorderStyle = FormBorderStyle.None;
+                StartPosition   = FormStartPosition.Manual;
+                Bounds          = tv.Bounds;
+                WindowState     = FormWindowState.Maximized;
+                Cursor.Hide();
+            }
+            else
+            {
+                WindowState     = FormWindowState.Normal;
+                FormBorderStyle = FormBorderStyle.Sizable;
+                Cursor.Show();
             }
 
-            Console.WriteLine("[MainForm] ⏹ Admin ShutdownApp: đóng ứng dụng...");
-            Application.Exit();
+            _isFullScreen = on;
         }
 
         // ════════════════════════════════════════════════════════════════════
@@ -241,40 +186,38 @@ namespace karaoke_home
         // ════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Cập nhật label "Đang phát" và "Tiếp theo" trên UI.
-        /// Thread-safe: tự Invoke về UI thread nếu cần.
+        /// Đưa một việc về UI thread. BeginInvoke (không chờ) thay vì Invoke (chờ):
+        /// thread nền không bị treo nếu UI thread đang bận hoặc đang đóng Form.
         /// </summary>
-        public void UpdateUIInfo(string nowPlaying, string nextSong)
+        private void RunOnUi(Action action)
         {
-            if (this.InvokeRequired)
-            {
-                this.Invoke(new Action(() => UpdateUIInfo(nowPlaying, nextSong)));
-                return;
-            }
-
-            lblNowPlaying.Text = $"Đang phát: {nowPlaying}";
-            lblNextSong.Text = $"Tiếp theo: {nextSong}";
+            if (IsDisposed || !IsHandleCreated) return;
+            try { BeginInvoke(action); }
+            catch (ObjectDisposedException) { }      // Form vừa đóng giữa chừng — bỏ qua
+            catch (InvalidOperationException) { }
         }
 
-        // ════════════════════════════════════════════════════════════════════
-        // TEST HARNESS (Bỏ comment để test nhanh)
-        // ════════════════════════════════════════════════════════════════════
-
-        private async void TestHarness()
+        private void UpdateUIInfo(string nowPlaying, string next)
         {
-            var songs = _scanner.GetSongs();
-            if (songs.Count == 0) return;
+            lblNowPlaying.Text = $"Đang phát: {nowPlaying}";
+            lblNextSong.Text   = $"Tiếp theo: {next}";
+        }
 
-            PlayNextSongInQueue(); // Lúc đầu queue trống → phát BGM
-
-            await Task.Delay(10000);
-            Console.WriteLine("🔥 [TEST] User order bài!");
-
-            _queue.AddSong(songs[2]);
-            _queue.AddSong(songs[3]);
-
-            if (_isPlayingBGM)
-                PlayNextSongInQueue(); // Ngắt BGM, phát bài vừa order
+        private void GenerateQRCode(string url)
+        {
+            try
+            {
+                using var generator = new QRCodeGenerator();
+                using var data      = generator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
+                using var qr        = new QRCode(data);
+                picQRCode.Image     = qr.GetGraphic(5);
+                picQRCode.SizeMode  = PictureBoxSizeMode.Zoom;
+                Console.WriteLine($"[MainForm] QR → {url}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[MainForm] Lỗi tạo QR: {ex.Message}");
+            }
         }
     }
 }
